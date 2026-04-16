@@ -16,6 +16,102 @@ Enter any US-listed stock ticker and get a structured diligence report in under 
 
 ---
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        USER BROWSER                             │
+│                                                                 │
+│   ┌─────────────────────────────────────────────────────────┐   │
+│   │            React Frontend  (localhost:5173)             │   │
+│   │                                                         │   │
+│   │   [ Ticker Input ] ──── [ Analyze Button ]              │   │
+│   │                                                         │   │
+│   │   ┌──────────┐  ┌──────────┐  ┌──────────────────────┐ │   │
+│   │   │ Company  │  │Financial │  │  AI Diligence        │ │   │
+│   │   │ Snapshot │  │ Metrics  │  │  Summary (5 sections)│ │   │
+│   │   └──────────┘  └──────────┘  └──────────────────────┘ │   │
+│   │                                                         │   │
+│   │   ┌─────────────────────────────────────────────────┐   │   │
+│   │   │            Recent News (6 headlines)            │   │   │
+│   │   └─────────────────────────────────────────────────┘   │   │
+│   └───────────────────────┬─────────────────────────────────┘   │
+└───────────────────────────│─────────────────────────────────────┘
+                            │
+                   POST /analyze
+                   { "ticker": "AAPL" }
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  FastAPI Backend  (localhost:8000)               │
+│                                                                 │
+│   ┌─────────────────────────────────────────────────────────┐   │
+│   │                   /analyze endpoint                     │   │
+│   │                                                         │   │
+│   │   1. get_market_data(ticker)                            │   │
+│   │   2. get_news(company_name, ticker)                     │   │
+│   │   3. synthesize(market_data, news)  ──► Gemini API      │   │
+│   │   4. return JSON                                        │   │
+│   └───────┬───────────────────┬──────────────────────────── ┘   │
+└───────────│───────────────────│─────────────────────────────────┘
+            │                   │
+            ▼                   ▼
+┌─────────────────┐   ┌──────────────────────┐
+│    yfinance     │   │  Google News RSS      │
+│  (no API key)   │   │  via feedparser       │
+│                 │   │  (no API key)         │
+│  · Price        │   │                       │
+│  · Market Cap   │   │  · 6 headlines        │
+│  · P/E Ratio    │   │  · Source + date      │
+│  · Revenue      │   │  · Article links      │
+│  · Margins      │   │                       │
+│  · Debt/Equity  │   └──────────┬────────────┘
+│  · 52w Range    │              │
+│  · Analyst      │              │
+└────────┬────────┘              │
+         └──────────┬────────────┘
+                    │
+                    ▼
+        ┌───────────────────────┐
+        │   Gemini 2.0 Flash    │
+        │                       │
+        │  Single structured    │
+        │  prompt combining     │
+        │  market data + news   │
+        │                       │
+        │  Returns:             │
+        │  1. Company Snapshot  │
+        │  2. Metrics Analysis  │
+        │  3. Recent Devs       │
+        │  4. Risk & Red Flags  │
+        │  5. Caution Notes     │
+        └───────────┬───────────┘
+                    │
+                    ▼
+        ┌───────────────────────┐
+        │   ⚠ Human Review     │
+        │                       │
+        │  Analyst validates    │
+        │  before any           │
+        │  downstream use       │
+        └───────────────────────┘
+```
+
+### Data Flow Summary
+
+| Step | What Happens |
+|------|-------------|
+| 1 | User types ticker in React UI, clicks Analyze |
+| 2 | Frontend sends `POST /analyze { "ticker": "AAPL" }` |
+| 3 | Backend fetches 15 financial fields from yfinance |
+| 4 | Backend fetches 6 news headlines from Google News RSS |
+| 5 | Both are packed into one structured Gemini prompt |
+| 6 | Gemini 2.0 Flash returns a 5-section diligence note |
+| 7 | JSON response renders in 5 UI cards |
+| 8 | Analyst reviews before any downstream use |
+
+---
+
 ## Stack
 
 | Layer | Technology |
